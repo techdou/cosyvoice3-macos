@@ -1,0 +1,55 @@
+# 白名单原则：默认全部忽略，只放行 skill 资产
+# 私密信息不入库 · 工具配置目录不上传 · 内部文档/开发状态不上传
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node（部分 skill 有 JS 依赖）
+node_modules/
+
+# 工具配置 / 运行时元数据（不上传）
+.clawhub/
+_clawhub/
+_meta.json
+skill-card.md
+skills-lock.json
+.openclaw/
+.codex/
+.claude/
+
+# 内部文档与开发状态（避免泄漏）
+DEVELOPMENT.md
+progress.md
+findings.md
+task_plan.md
+TODO.md
+NOTES.md
+*.draft.md
+*.private.md
+
+# 日志与临时文件
+*.log
+logs/
+*.tmp
+*.bak
+*.swp
+
+# 模型与音频产物（体积大且可能含私有音色）
+*.wav
+*.mp3
+*.onnx
+*.pt
+*.safetensors
+models/
+voices/
+
+# IDE
+.idea/
+.vscode/
