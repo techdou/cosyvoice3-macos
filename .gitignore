@@ -50,6 +50,10 @@ logs/
 models/
 voices/
 
+# 本地部署状态（POLY_TTS_HOME 若被指到仓库内；密钥永不落盘，只走环境变量）
+.poly-tts/
+*.part
+
 # IDE
 .idea/
 .vscode/

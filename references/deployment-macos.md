@@ -1,6 +1,9 @@
-# macOS Apple Silicon 部署参考
+# macOS Apple Silicon 部署参考（cosyvoice3 后端）
 
 > 本目录是本地实测部署经验的沉淀。SKILL.md 只保留命令入口，排坑细节在这里。
+> v2 起：skill 更名 poly-tts 并支持多后端；macOS 上 `install.py cosyvoice3`
+> 委托本目录同级的 install.sh（验证路径不变），装完会注册
+> `~/.poly-tts/config.json`，统一 CLI `scripts/tts.py` 在 mac 上 auto 路由到本后端。
 
 ## 官方信息（2026-08-23 核实）
 

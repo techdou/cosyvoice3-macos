@@ -28,8 +28,14 @@ require_tool() {
 }
 
 check_platform() {
-    [ "$(uname -s)" = "Darwin" ] || die "this installer is for macOS"
-    [ "$(uname -m)" = "arm64" ] || die "this installer is for Apple Silicon (arm64)"
+    case "$(uname -s)" in
+      Darwin)
+        [ "$(uname -m)" = "arm64" ] || die "this installer is for Apple Silicon (arm64)" ;;
+      Linux)
+        echo "ℹ️ Linux path is community-supported (not field-verified like macOS)" ;;
+      *)
+        die "native Windows is not supported for cosyvoice3; use install.py qwen3tts instead" ;;
+    esac
 }
 
 check_free_space() {
@@ -96,9 +102,13 @@ import sys
 assert sys.version_info[:2] == (3, 10), sys.version
 EOF
 
-echo "🔥 Installing torch (CPU wheels)..."
+echo "🔥 Installing torch wheels (platform-dependent)..."
+TORCH_INDEX="https://download.pytorch.org/whl/cpu"
+if [ "$(uname -s)" = "Linux" ] && command -v nvidia-smi >/dev/null 2>&1; then
+    TORCH_INDEX="https://download.pytorch.org/whl/cu121"
+fi
 uv pip install --python .venv/bin/python torch==2.3.1 torchaudio==2.3.1 \
-    --index-url https://download.pytorch.org/whl/cpu
+    --index-url "$TORCH_INDEX"
 
 echo "📦 Installing dependencies (strip CUDA-only index lines)..."
 REQ_FILE="$(mktemp "${TMPDIR:-/tmp}/cv3-req-mac.XXXXXX")"
@@ -131,7 +141,34 @@ EOF
     echo "model ready"
 fi
 
+echo "📝 Registering backend in ~/.poly-tts/config.json ..."
+POLY_HOME="${POLY_TTS_HOME:-$HOME/.poly-tts}"
+mkdir -p "$POLY_HOME"
+.venv/bin/python - "$POLY_HOME/config.json" "$REPO" <<'EOF'
+import json, os, sys
+config_path, repo = sys.argv[1], sys.argv[2]
+cfg = {}
+if os.path.isfile(config_path):
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        cfg = {}
+entry = {
+    "venv_python": os.path.join(repo, ".venv", "bin", "python"),
+    "repo": repo,
+    "model_dir": os.path.join(repo, "pretrained_models", "Fun-CosyVoice3-0.5B"),
+}
+cfg.setdefault("backends", {})["cosyvoice3"] = entry
+tmp = config_path + ".part"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(cfg, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+os.replace(tmp, config_path)
+print("✓ registered backends.cosyvoice3")
+EOF
+
 echo ""
 echo "=== Done ==="
-echo "Smoke test:"
-echo "  $REPO/.venv/bin/python <skill-dir>/scripts/tts.py '你好，测试。' -o /tmp/test.wav"
+echo "Smoke test (unified CLI, any python):"
+echo "  python3 <skill-dir>/scripts/tts.py '你好，测试。' -o /tmp/test.wav"

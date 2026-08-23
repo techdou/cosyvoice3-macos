@@ -1,84 +1,92 @@
-# CosyVoice3 TTS Skill (macOS Apple Silicon)
+# poly-tts — 多平台多后端语音合成 Skill
 
-Local text-to-speech agent skill wrapping Alibaba's [CosyVoice3](https://github.com/QwenAudio/CosyVoice) for macOS Apple Silicon — multilingual synthesis, zero-shot voice cloning, fully on-device inference.
+一个 Agent Skill：统一 CLI 入口 + 三个可切换的 TTS 后端（本地克隆 × 2、云端 × 1），Windows / macOS / Linux 通吃。
 
-> **Agent Skill 格式**：本仓库是一个 OpenClaw / ClawHub 兼容的 Agent Skill，AI Agent 读取 `SKILL.md` 后即可自主调用。
+> 仓库背景：本仓库起于 macOS 专用的 cosyvoice3-macos skill，现演进为多平台多后端的 poly-tts。macOS CosyVoice3 路径保留原有实测验证，新增 Windows/Linux 的 Qwen3-TTS 本地后端与阿里云 DashScope 兜底后端。
 
-## ✨ 特性
+> **Agent Skill 格式**：AI Agent 读取 `SKILL.md` 后即可自主调用。
 
-- 🗣️ **多语言合成** — 中/英/跨语言，inline 非语言标签（笑声等）
-- 🎭 **零样本音色克隆** — 一段 3-10s 授权参考音频 + 逐字稿即可注册专属音色
-- 🚀 **语速控制** — `--speed 0.5~2.0`
-- 🔒 **单实例锁** — fcntl 锁防止多进程并发加载模型导致内存爆掉
-- ⚛️ **原子输出** — 临时文件 + 校验 + 原子替换，不会留半截音频
-- 📦 **可恢复安装** — 模型文件清单校验，断点续传；锁定已验证 commit `074ca6d`（`COSYVOICE_COMMIT` 可覆盖）
-- 🛡️ **前置校验** — 参数/路径/音色元数据在模型加载前快速失败，报错自带修复提示
+## 后端矩阵
 
-## 📁 目录结构
+| 后端 | 平台 | 硬件 | 声音克隆 | 部署量 |
+|------|------|------|----------|--------|
+| `qwen3tts` | Windows / Linux | NVIDIA GPU（12GB 即可） | ✅ | venv + torch cu128 + 模型 2.4GB |
+| `cosyvoice3` | macOS Apple Silicon（实测）/ Linux | CPU 即可 | ✅ | venv + 模型 9.1GB |
+| `dashscope` | 任意 | 无 | ❌（48 预置音色） | 零安装，配 `DASHSCOPE_API_KEY` |
+
+三个后端共享同一个 CLI、同一套音色库（`~/.poly-tts/voices/`）、同一个输出协议
+（`OUTPUT=<path>` + load/gen/dur/rtf 计时行）。后端选择：显式 `--backend` >
+平台自动路由。两个本地后端依赖冲突（transformers 4.57.3 vs 4.51.3），各自独立
+venv，由 `~/.poly-tts/config.json` 登记、调度器自动选用。
+
+## 安装
+
+前置：`uv`、`ffmpeg`。模型默认下载到 `~/.poly-tts/models/`，可用 `--model-dir`
+指向已有目录（如 `E:\models\Qwen3-TTS`）。
+
+```bash
+# Windows / Linux + NVIDIA GPU（本机有模型直接登记）
+python scripts/install.py qwen3tts --model-dir "E:/models/Qwen3-TTS"
+# 或让安装器下载模型（HuggingFace / ModelScope 二选一）
+python scripts/install.py qwen3tts --download hf
+
+# macOS / Linux（CosyVoice3，走原实测安装路径）
+python scripts/install.py cosyvoice3
+
+# 云端兜底（无需安装）
+export DASHSCOPE_API_KEY=sk-xxx   # https://bailian.console.aliyun.com
+
+# 体检
+python scripts/install.py doctor
+python scripts/tts.py backends
+```
+
+## 使用
+
+```bash
+# 自动路由：win→qwen3tts / mac→cosyvoice3 / 兜底 dashscope
+python scripts/tts.py "你好，世界。" -o out.wav
+
+# 云端预置音色
+python scripts/tts.py "播报一段新闻" --backend dashscope --voice Cherry -o out.wav
+
+# 注册自己的音色（须有授权参考音频 + 逐字稿；2.5-20s，最佳 3-10s）
+python scripts/voice_manager.py add dou --wav rec.wav --text "参考音频逐字稿"
+python scripts/tts.py "用我的声音说话" --voice dou -o me.wav
+
+# 零样本一次性克隆
+python scripts/tts.py "文本" -r ref.wav --reference-text "逐字稿" -o out.wav
+```
+
+详细用法、各后端差异、韵律标签、语速控制见 `SKILL.md`；官方文档调研与选型
+依据见 `references/backends.md`。
+
+## 目录结构
 
 ```
-├── SKILL.md                      # Skill 定义（Agent 入口，先读这个）
+├── SKILL.md                      # Skill 定义（Agent 入口）
 ├── scripts/
-│   ├── install.sh                # 一键安装：依赖预检 + clone + venv + 模型下载
-│   ├── download_models.py        # 模型下载（清单校验，可续传）
-│   ├── tts.py                    # 合成 CLI
-│   └── voice_manager.py          # 音色库管理（add/list/remove）
+│   ├── tts.py                    # 统一 CLI（纯标准库调度器 + dashscope 实现）
+│   ├── backends/
+│   │   ├── run_cosyvoice3.py     # cosyvoice3 后端 worker（跑在它的 venv 里）
+│   │   └── run_qwen3tts.py       # qwen3tts 后端 worker（跑在它的 venv 里）
+│   ├── install.py                # 跨平台安装器 + doctor
+│   ├── install.sh                # macOS/Linux cosyvoice3 原验证路径（install.py 委托它）
+│   ├── download_models.py        # 模型下载（清单校验，断点续传，HF/ModelScope）
+│   └── voice_manager.py          # 音色库（add/list/remove/test/migrate）
 └── references/
-    └── deployment-macos.md       # macOS 部署细节与故障排查
+    ├── backends.md               # 三后端官方文档调研沉淀
+    ├── deployment-macos.md       # macOS 部署细节（版本钉死 + 已踩坑）
+    └── deployment-windows.md     # Windows/RTX50 部署实测
 ```
 
-## 🚀 快速开始
+## 伦理与安全
 
-### 安装（新机器）
+- 只克隆**获得授权**的参考音频；不克隆他人声音做仿冒，不跨厂商克隆商用预置音色
+- 本地后端数据不出机器；dashscope 后端文本会上云（敏感内容选本地）
+- `DASHSCOPE_API_KEY` 只从环境变量读取，不写入任何文件
 
-```bash
-bash scripts/install.sh
-```
+## 许可
 
-预检 `git/uv/ffmpeg/ffprobe` 与磁盘空间（模型 ~9.1GB，repo 共 ~11GB），然后部署到 `~/.cosyvoice3-repo`（`COSYVOICE_REPO` 可覆盖）。
-
-### 合成
-
-```bash
-REPO=~/.cosyvoice3-repo
-PY=$REPO/.venv/bin/python
-
-# 基础合成（内置中文女声音色）
-$PY scripts/tts.py "你好，世界。" -o /tmp/hello.wav
-
-# 语速控制
-$PY scripts/tts.py "语速快一点" --speed 1.5 -o /tmp/fast.wav
-
-# 长文本（从文件读，上游自动分块）
-$PY scripts/tts.py --text-file script.txt --voice my-voice -o out.wav
-```
-
-### 注册克隆音色
-
-```bash
-# 仅使用你有权使用的音频；硬限 2.5-20s，最佳 3-10s
-$PY scripts/voice_manager.py add my-voice --wav ~/ref.wav --text "参考音频逐字稿"
-$PY scripts/voice_manager.py list
-$PY scripts/tts.py "用我的音色说话" --voice my-voice -o me.wav
-```
-
-## ⏱️ 性能实测（M4 / 16GB RAM / CPU 推理）
-
-| 指标 | 数值 |
-|------|------|
-| 冷启动（模型加载） | ~53s |
-| 热启动 | ~8s |
-| RTF | 1.7~2.1 |
-| 1300 字端到端 | ~4min |
-| 内存峰值 | 5-7GB |
-
-## ⚠️ 伦理与安全
-
-- 只克隆**获得授权**的参考音频；不要克隆他人声音
-- 本 skill 的合成不经过第三方 API，数据不出机器
-
-## 📄 许可
-
-- 本 skill 代码：MIT（基于 [lhuaizhong](https://clawhub.ai/user/lhuaizhong) 的原版 skill 大幅加固重构）
-- 上游 CosyVoice：Apache-2.0
-- 模型 Fun-CosyVoice3-0.5B：遵循其发布许可
+- 本 skill 代码：MIT（基于 [lhuaizhong](https://clawhub.ai/user/lhuaizhong) 的原版 cosyvoice3-macos skill 演进）
+- 上游模型：CosyVoice Apache-2.0 · Qwen3-TTS Apache-2.0 · DashScope 按阿里云服务条款
