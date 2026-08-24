@@ -2,7 +2,7 @@
 
 一个 Agent Skill：统一 CLI 入口 + 三个可切换的 TTS 后端（本地克隆 × 2、云端 × 1），Windows / macOS / Linux 通吃。
 
-> 仓库背景：本仓库起于 macOS 专用的 cosyvoice3-macos skill，现演进为多平台多后端的 poly-tts。macOS CosyVoice3 路径保留原有实测验证，新增 Windows/Linux 的 Qwen3-TTS 本地后端与阿里云 DashScope 兜底后端。
+> 仓库背景：本仓库起于 macOS 专用的 cosyvoice3-macos skill，现演进为多平台多后端的 poly-tts，仓库已随之更名为 `techdou/poly-tts`（旧地址自动重定向）。macOS CosyVoice3 路径保留原有实测验证，新增 Windows/Linux 的 Qwen3-TTS 本地后端与阿里云 DashScope 兜底后端。
 
 > **Agent Skill 格式**：AI Agent 读取 `SKILL.md` 后即可自主调用。
 
